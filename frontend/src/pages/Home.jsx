@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { mockDb } from '../mockDb';
 import car1 from '../assets/car1.png';
 import car2 from '../assets/car2.png';
 import car3 from '../assets/car3.png';
@@ -44,63 +45,38 @@ const Home = () => {
         e.preventDefault();
         if (!formData.email || !formData.password) return alert('Please fill all fields');
         
-        try {
-            const response = await fetch('http://localhost:8080/auth/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    email: formData.email,
-                    password: formData.password
-                })
-            });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                const targetRoute = data.role === 'driver' ? '/driver-dashboard' : '/booking-interface';
-                localStorage.setItem('user', JSON.stringify(data));
-                startExitSequence(targetRoute);
-            } else {
-                alert(data.message || 'Login failed');
-            }
-        } catch (error) {
-            console.error('Sign in error:', error);
-            alert('Failed to connect to backend. Make sure it is running on port 8080.');
+        const result = mockDb.users.login(formData.email, formData.password);
+        if (result.success) {
+            const data = result.data;
+            const targetRoute = data.role === 'driver' ? '/driver-dashboard' : '/booking-interface';
+            localStorage.setItem('user', JSON.stringify(data));
+            startExitSequence(targetRoute);
+        } else {
+            alert(result.message || 'Login failed');
         }
     };
 
     const handleSignUp = async (e) => {
         e.preventDefault();
-        if (!formData.email || !formData.password || !formData.role || !formData.name) return alert('Please fill all fields');
         if (!formData.email || !formData.password || !formData.role || !formData.name || !formData.phone) return alert('Please fill all fields');
         
-        try {
-            const response = await fetch('http://localhost:8080/auth/register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    username: formData.name, // Still using name as username
-                    name: formData.name,     // Also sending as specific name field
-                    phone: formData.phone,
-                    email: formData.email,
-                    password: formData.password,
-                    role: formData.role
-                })
-            });
+        const result = mockDb.users.register({
+            username: formData.name,
+            name: formData.name,
+            phone: formData.phone,
+            email: formData.email,
+            password: formData.password,
+            role: formData.role
+        });
 
-            const data = await response.json();
-
-            if (response.ok) {
-                const targetRoute = data.role === 'driver' ? '/driver-dashboard' : '/booking-interface';
-                localStorage.setItem('user', JSON.stringify(data));
-                alert('Account created successfully!');
-                startExitSequence(targetRoute);
-            } else {
-                alert(data.message || 'Registration failed');
-            }
-        } catch (error) {
-            console.error('Sign up error:', error);
-            alert('Failed to connect to backend.');
+        if (result.success) {
+            const data = result.data;
+            const targetRoute = data.role === 'driver' ? '/driver-dashboard' : '/booking-interface';
+            localStorage.setItem('user', JSON.stringify(data));
+            alert('Account created successfully!');
+            startExitSequence(targetRoute);
+        } else {
+            alert(result.message || 'Registration failed');
         }
     };
 

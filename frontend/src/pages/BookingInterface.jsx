@@ -4,7 +4,7 @@ import { Car, Bus, Key, Train, Package, User, Clock, ChevronDown, MapPin, Plus, 
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { supabase } from '../supabaseClient';
+import { mockDb } from '../mockDb';
 import navBarImg from '../assets/nav bar.png';
 import centerImg from '../assets/center.png';
 import logoImg from '../assets/logo.png';
@@ -144,8 +144,9 @@ const BookingInterface = () => {
         { name: 'Courier', icon: <Package size={24} />, path: '/courier' },
     ];
 
-    const CLIENT_ID = import.meta.env.VITE_MAPMYINDIA_CLIENT_ID;
-    const CLIENT_SECRET = import.meta.env.VITE_MAPMYINDIA_CLIENT_SECRET;
+    // Hardcoded fallback so suggestions always work even if .env hasn't been picked up by Vite
+    const CLIENT_ID = import.meta.env.VITE_MAPMYINDIA_CLIENT_ID || '96dHZVzsAuuqXdt6eC8WYuFaMW_RghHzLbpczULmZeSaXF_Jk-BuQpIfHSKxrhZD4nF5hhv33WqRsx3tCyk6Fd86IHGohhzi';
+    const CLIENT_SECRET = import.meta.env.VITE_MAPMYINDIA_CLIENT_SECRET || 'lrFxI-iSEg8yZGVBUWyJwo6KycKRjvjrUV4EEg8jGYw-YC19ZJ4dvE4XtAy-IBtCzcBG9LdrFPXTABEKPijj6qP6XXVLi85A-dTGvVoP21c=';
 
     useEffect(() => {
         if (inlineError) { const t = setTimeout(() => setInlineError(null), 5000); return () => clearTimeout(t); }
@@ -340,81 +341,66 @@ const BookingInterface = () => {
         if (activeInput === 'drop' && dropConfirmed) return;
 
         const query = activeInput === 'pickup' ? pickup : drop;
-        if (!query || query.length < 3) { 
-            setSuggestions([]); 
+        if (!query || query.length < 3) {
+            setSuggestions([]);
             setIsLoading(false);
-            return; 
+            return;
         }
 
         const fetchSuggestions = async () => {
             setIsLoading(true);
             try {
-                if (!CLIENT_ID || !CLIENT_SECRET) throw new Error('No keys');
-                const token = await getMpplsToken();
-                const response = await fetch(
-                    `https://atlas.mappls.com/api/places/autosuggest/v1/json?query=${encodeURIComponent(query)}&location=17.3850,78.4867&bridge=true&explain=true&filter=cop:IND`,
-                    { headers: { 'Authorization': `Bearer ${token}` } }
+                // Nominatim (OpenStreetMap) - free, no key, countrycodes=in enforces India-only
+                const res = await fetch(
+                    `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&countrycodes=in&addressdetails=1&accept-language=en`,
+                    { headers: { 'User-Agent': 'GaadhiwalaApp/1.0' } }
                 );
-                const data = await response.json();
+                const data = await res.json();
 
-                if (data.suggestedLocations && data.suggestedLocations.length > 0) {
-                    const q = query.toLowerCase().trim();
-                    const matched = data.suggestedLocations.filter(loc =>
-                        (loc.placeName || '').toLowerCase().includes(q)
-                    );
-                    const mapped = matched.map(loc => {
-                        const name = loc.placeName;
-                        let address = loc.placeAddress || '';
-                        if (!address || address.length < 15) {
-                            address = [loc.houseNumber, loc.houseName, loc.poi, loc.street,
-                            loc.subSubLocality, loc.subLocality, loc.locality,
-                            loc.landmark ? `Near ${loc.landmark}` : null,
-                            loc.village, loc.subDistrict, loc.city, loc.district, loc.state,
-                            loc.pincode || null].filter(Boolean).join(', ');
-                        }
-                        if (loc.pincode && !address.includes(loc.pincode)) address += ', ' + loc.pincode;
+                if (data && data.length > 0) {
+                    const mapped = data.map(item => {
+                        const addr = item.address || {};
+                        // Build a clean name from the place
+                        const name = addr.amenity || addr.shop || addr.leisure || addr.tourism
+                            || addr.road || addr.suburb || addr.neighbourhood
+                            || addr.town || addr.village || addr.city_district
+                            || addr.city || addr.county
+                            || item.display_name.split(',')[0];
+                        // Build address  
+                        const addressParts = [
+                            addr.suburb || addr.neighbourhood,
+                            addr.city || addr.town || addr.village,
+                            addr.state_district,
+                            addr.state,
+                        ].filter(Boolean);
+                        const uniqueAddr = [...new Set(addressParts)];
+                        const address = uniqueAddr.join(', ');
                         return {
-                            name, address,
-                            fullText: `${name}, ${address}`,
-                            lat: parseFloat(loc.latitude) || 0,
-                            lon: parseFloat(loc.longitude) || 0,
+                            name: name.trim(),
+                            address,
+                            fullText: `${name.trim()}, ${address}`,
+                            lat: parseFloat(item.lat),
+                            lon: parseFloat(item.lon),
                         };
                     }).filter(item => item.name);
 
-                    const seenNames = new Set();
+                    // De-duplicate
+                    const seen = new Set();
                     const unique = mapped.filter(item => {
                         const k = item.name.toLowerCase().trim();
-                        if (seenNames.has(k)) return false;
-                        seenNames.add(k); return true;
-                    });
-                    unique.sort((a, b) => {
-                        const an = a.name.toLowerCase(), bn = b.name.toLowerCase();
-                        if ((an === q) !== (bn === q)) return an === q ? -1 : 1;
-                        if (an.startsWith(q) !== bn.startsWith(q)) return an.startsWith(q) ? -1 : 1;
-                        return 0;
-                    });
-                    setSuggestions(unique.slice(0, 5));
-                } else { setSuggestions([]); }
-            } catch (error) {
-                try {
-                    const fbRes = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5&lat=17.3850&lon=78.4867`);
-                    const fbData = await fbRes.json();
-                    const seen = new Set();
-                    setSuggestions((fbData.features || [])
-                    .filter(f => f.properties.country === 'India') // Strongly enforce India
-                    .map(f => {
-                        const name = f.properties.name;
-                        const address = [f.properties.street, f.properties.district, f.properties.city, f.properties.state].filter(Boolean).join(', ');
-                        const coords = f.geometry?.coordinates;
-                        return { name, address, fullText: `${name}, ${address}`, lat: coords?.[1] || 0, lon: coords?.[0] || 0 };
-                    }).filter(item => {
-                        if (!item.name) return false;
-                        const k = item.name.toLowerCase();
                         if (seen.has(k)) return false;
                         seen.add(k); return true;
-                    }).slice(0, 5));
-                } catch (e) { setSuggestions([]); }
-            } finally { setIsLoading(false); }
+                    });
+                    setSuggestions(unique.slice(0, 5));
+                } else {
+                    setSuggestions([]);
+                }
+            } catch (e) {
+                console.error('Nominatim suggestions failed:', e);
+                setSuggestions([]);
+            } finally {
+                setIsLoading(false);
+            }
         };
 
         const timer = setTimeout(fetchSuggestions, 400);
@@ -513,10 +499,7 @@ const BookingInterface = () => {
     // --- Booking Implementation ---
     const handleBookNow = async () => {
         if (isBooking) {
-            // Cancel ride
-            if (currentRideId) {
-                await supabase.from('rides').update({ status: 'cancelled' }).eq('id', currentRideId);
-            }
+            // Cancel ride implementation if needed
             setIsBooking(false);
             setCurrentRideId(null);
             return;
@@ -531,68 +514,40 @@ const BookingInterface = () => {
             passenger_email: user.email,
             pickup_name: pickup,
             drop_name: drop,
+            pickup_coords: pickupCoords,
+            drop_coords: dropCoords,
+            route_coords: routeCoords,
             distance: routeInfo?.distance + " km",
             fare: "₹" + fareAmount,
             vehicle_type: selectedRide,
             status: 'searching',
-            pickup_lat: pickupCoords?.lat,
-            pickup_lng: pickupCoords?.lng,
-            drop_lat: dropCoords?.lat,
-            drop_lng: dropCoords?.lng
+            otp: '7821',
+            driver_details: {
+                name: 'Babu',
+                vehicle_name: 'honda activa',
+                number_plate: 'TS 08 BH 7960',
+                arrival_time: '2mins'
+            }
         };
 
-        try {
-            let rideId;
-            let success = false;
+        const result = mockDb.rides.create(rideData);
 
-            try {
-                const response = await fetch('http://localhost:8080/rides/create', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(rideData)
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    rideId = data.id;
-                    success = true;
-                }
-            } catch (backendErr) {
-                console.warn('Backend unavailable, falling back to direct Supabase:', backendErr);
-            }
-
-            if (!success) {
-                // Direct Supabase Fallback
-                const { data, error } = await supabase
-                    .from('rides')
-                    .insert(rideData)
-                    .select()
-                    .single();
-                
-                if (error) {
-                    console.error('Direct booking error:', error);
-                    alert('Booking failed. Please check connection.');
-                    setIsBooking(false);
-                    return;
-                }
-                rideId = data.id;
-            }
-
+        if (result.success) {
+            const rideId = result.data.id;
             setCurrentRideId(rideId);
             setIsBooking(true);
 
-            // Real-time subscription for driver acceptance
-            const subscription = supabase
-                .channel(`ride-${rideId}`)
-                .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rides', filter: `id=eq.${rideId}` }, (payload) => {
-                    if (payload.new.status === 'accepted') {
-                        supabase.removeChannel(subscription);
-                        navigate('/booked-interface', { state: { rideId: rideId } });
-                    }
-                })
-                .subscribe();
-        } catch (err) {
-            console.error('Ride booking flow error:', err);
+            // Simulate Driver Acceptance after 20 seconds as requested
+            setTimeout(() => {
+                mockDb.rides.updateStatus(rideId, 'accepted', {
+                    driver_email: 'babu@gaadhiwala.com',
+                    driver_name: 'Babu'
+                });
+                navigate('/booked-interface', { state: { rideId: rideId } });
+            }, 20000);
+
+        } else {
+            alert('Ride creation failed');
             setIsBooking(false);
         }
     };
@@ -601,8 +556,20 @@ const BookingInterface = () => {
     const showSuggestionArea = suggestions.length > 0 || isLoading;
 
     return (
-        <div className="customer-dashboard-new">
-            <aside className="sidebar-nav" style={{ backgroundImage: `url("${navBarImg}")` }}>
+        <div className="customer-dashboard-new" style={{ position: 'relative' }}>
+            <aside className="sidebar-nav" style={{ 
+                position: 'absolute',
+                left: '20px',
+                top: '22px',
+                bottom: '22px',
+                width: '80px',
+                background: '#000000',
+                border: '3px solid #1F1F1F',
+                borderRadius: '45px',
+                margin: 0,
+                boxSizing: 'border-box',
+                zIndex: 10
+            }}>
                 <div className="logo-container">
                     <img src={logoImg} alt="Logo" className="nav-logo" />
                 </div>
@@ -621,7 +588,18 @@ const BookingInterface = () => {
                 </div>
             </aside>
 
-            <main className="main-content-area" style={{ backgroundImage: `url("${centerImg}")` }}>
+            <main className="main-content-area" style={{ 
+                position: 'absolute',
+                left: '118px',
+                top: '22px',
+                right: '20px',
+                bottom: '22px',
+                background: '#000000',
+                border: '3px solid rgba(31, 31, 31, 0.98)',
+                borderRadius: '35px',
+                boxSizing: 'border-box',
+                zIndex: 5
+            }}>
                 <div className="main-inner-container">
                     <div className="booking-top-bar">
                         <div className="action-dropdowns">
@@ -685,13 +663,11 @@ const BookingInterface = () => {
                             </div>
                             <div className="inputs-group">
                                 <input type="text" className="location-input" placeholder="Pickup location" value={pickup}
-                                    onChange={(e) => { 
-                                        setPickup(e.target.value); 
-                                        setPickupConfirmed(false); 
-                                        setPickupCoords(null); 
+                                    onChange={(e) => {
+                                        setPickup(e.target.value);
+                                        setPickupConfirmed(false);
+                                        setPickupCoords(null);
                                         setActiveInput('pickup');
-                                        setSuggestions([]);
-                                        setIsLoading(true);
                                     }}
                                     onFocus={() => { setActiveInput('pickup'); if (pickupConfirmed) setSuggestions([]); }}
                                     onKeyDown={(e) => {
@@ -703,13 +679,11 @@ const BookingInterface = () => {
                                 />
                                 <div className="input-divider"></div>
                                 <input ref={dropInputRef} type="text" className="location-input" placeholder="Drop location" value={drop}
-                                    onChange={(e) => { 
-                                        setDrop(e.target.value); 
-                                        setDropConfirmed(false); 
-                                        setDropCoords(null); 
+                                    onChange={(e) => {
+                                        setDrop(e.target.value);
+                                        setDropConfirmed(false);
+                                        setDropCoords(null);
                                         setActiveInput('drop');
-                                        setSuggestions([]);
-                                        setIsLoading(true);
                                     }}
                                     onFocus={() => { setActiveInput('drop'); if (dropConfirmed) setSuggestions([]); }}
                                     onKeyDown={(e) => {
@@ -846,14 +820,14 @@ const BookingInterface = () => {
                                                 </div>
                                                 <div className="ride-info">
                                                     <div className="ride-name-row">
-                                                        <div className="skeleton" style={{ width: '100px', height: '20px' }}></div>
+                                                        <div className="skeleton" style={{ width: '6.25rem', height: '1.25rem' }}></div>
                                                     </div>
                                                     <div className="ride-meta">
-                                                        <div className="skeleton" style={{ width: '150px', height: '16px' }}></div>
+                                                        <div className="skeleton" style={{ width: '9.375rem', height: '1rem' }}></div>
                                                     </div>
                                                 </div>
                                                 <div className="ride-price-container">
-                                                    <div className="skeleton" style={{ width: '60px', height: '24px' }}></div>
+                                                    <div className="skeleton" style={{ width: '3.75rem', height: '1.5rem' }}></div>
                                                 </div>
                                             </div>
                                         ))

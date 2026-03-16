@@ -4,7 +4,7 @@ import { MapPin, Activity, User, LogOut, LayoutDashboard, Sun, Clock, Star, Tren
 import { MapContainer, TileLayer, Marker, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { supabase } from '../supabaseClient';
+import { mockDb } from '../mockDb';
 
 import dOcenter from '../assets/d_ocenter.png';
 import dIcenter from '../assets/d_icenter.png';
@@ -52,15 +52,11 @@ const DriverDashboard = () => {
     const [isMapExpanded, setIsMapExpanded] = useState(false);
     const [availableRides, setAvailableRides] = useState([]);
     const [currentExpandedRide, setCurrentExpandedRide] = useState(null);
+    const [isSaved, setIsSaved] = useState(true); // Default to true to avoid flash
+    const [isLoadingProfile, setIsLoadingProfile] = useState(true);
     const [profile, setProfile] = useState({
         name: '', email: '', phone: '', password: '', 
         vehicleModel: '', vehiclePlate: '', vehicleType: 'Bike/Scooty', experience: ''
-    });
-
-    // Persistent state for profile completion to prevent reappearing form
-    const [isSaved, setIsSaved] = useState(() => {
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
-        return user.profileCompleted || false;
     });
 
     const vehicleTypes = ['Bike/Scooty', 'Auto', 'Car', 'Luxury Car', 'Big Car'];
@@ -116,93 +112,30 @@ const DriverDashboard = () => {
     };
 
     useEffect(() => {
-        const fetchRides = async () => {
-            console.log('Driver Hub: Fetching available rides...');
-            const { data, error } = await supabase
-                .from('rides')
-                .select('*')
-                .eq('status', 'searching');
-            
-            if (error) {
-                console.error('Fetch error:', error);
-            } else {
-                console.log('Available rides found:', data.length);
-                setAvailableRides(data || []);
-            }
+        const fetchRides = () => {
+            const rides = mockDb.rides.getAll().filter(r => r.status === 'searching');
+            setAvailableRides(rides);
         };
 
         fetchRides();
+        const interval = setInterval(fetchRides, 2000); // Poll every 2 seconds
 
-        // Subscription for rides
-        const subscription = supabase
-            .channel('public:rides')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'rides' }, (payload) => {
-                console.log('New ride record inserted:', payload.new);
-                if (payload.new.status === 'searching') {
-                    setAvailableRides(prev => [payload.new, ...prev]);
-                }
-            })
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rides' }, (payload) => {
-                console.log('Ride record updated:', payload.new);
-                if (payload.new.status !== 'searching') {
-                    setAvailableRides(prev => prev.filter(r => r.id !== payload.new.id));
-                } else {
-                    setAvailableRides(prev => {
-                        const exists = prev.find(r => r.id === payload.new.id);
-                        if (exists) return prev.map(r => r.id === payload.new.id ? payload.new : r);
-                        return [payload.new, ...prev];
-                    });
-                }
-            })
-            .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'rides' }, (payload) => {
-                console.log('Ride record deleted:', payload.old.id);
-                setAvailableRides(prev => prev.filter(r => r.id !== payload.old.id));
-            })
-            .subscribe((status) => {
-                console.log('Supabase Realtime status:', status);
-            });
-
-        return () => {
-            supabase.removeChannel(subscription);
-        };
+        return () => clearInterval(interval);
     }, []);
 
     const handleAcceptRide = async (rideId) => {
         const userStr = localStorage.getItem('user');
         const user = userStr ? JSON.parse(userStr) : null;
-        if (!user || !user.email) return alert('Please login first');
+        if (!user) return alert('Driver info missing. Please sign in.');
 
-        try {
-            let success = false;
-            try {
-                const response = await fetch(`http://localhost:8080/rides/${rideId}/accept?driverEmail=${user.email}`, {
-                    method: 'POST'
-                });
-                if (response.ok) success = true;
-            } catch (backendErr) {
-                console.warn('Backend unavailable, accepting via Supabase directly:', backendErr);
-            }
+        const result = mockDb.rides.updateStatus(rideId, 'accepted', { 
+            driver_email: user.email 
+        });
 
-            if (!success) {
-                const { error } = await supabase
-                    .from('rides')
-                    .update({ status: 'accepted', driver_email: user.email })
-                    .eq('id', rideId);
-                
-                if (error) {
-                    console.error('Direct acceptance error:', error);
-                    alert('Failed to accept ride. Please try again.');
-                    return;
-                }
-            }
-
-            // Remove from available list locally immediately for better UX
-            setAvailableRides(prev => prev.filter(r => r.id !== rideId));
-            
+        if (result.success) {
             navigate('/booked-interface2', { state: { rideId } });
-        } catch (err) {
-            console.error('Accept ride error:', err);
-            alert('Failed to connect to server');
+        } else {
+            alert('Failed to accept ride');
         }
     };
 
@@ -220,27 +153,25 @@ const DriverDashboard = () => {
             return;
         }
 
-        const { error } = await supabase
-            .from('drivers')
-            .update({
-                name: profile.name,
-                phone: profile.phone,
-                password: profile.password,
-                vehicle_model: profile.vehicleModel,
-                vehicle_plate: profile.vehiclePlate,
-                vehicle_type: profile.vehicleType,
-                experience: profile.experience
-            })
-            .eq('email', user.email);
+        const result = mockDb.drivers.saveProfile({
+            email: user.email,
+            name: profile.name,
+            phone: profile.phone,
+            password: profile.password,
+            vehicle_model: profile.vehicleModel,
+            vehicle_plate: profile.vehiclePlate,
+            vehicle_type: profile.vehicleType,
+            experience: profile.experience
+        });
 
-        if (error) {
-            console.error('Update profile error details:', error);
-            alert(`Failed to save profile: ${error.message}`);
-        } else {
+        if (result.success) {
             // Update local storage too
-            const updatedUser = { ...user, ...profile, profileCompleted: true };
+            const updatedUser = { ...user, ...profile };
             localStorage.setItem('user', JSON.stringify(updatedUser));
             setIsSaved(true);
+            setTimeout(() => setIsSaved(false), 3000);
+        } else {
+            alert('Failed to save profile');
         }
     };
 
@@ -250,15 +181,11 @@ const DriverDashboard = () => {
             const localUser = JSON.parse(userStr);
             console.log('Initializing Driver Hub for:', localUser.email);
             
-            const fetchFreshProfile = async () => {
+            const fetchFreshProfile = () => {
                 setIsLoadingProfile(true);
-                const { data, error } = await supabase
-                    .from('drivers')
-                    .select('*')
-                    .eq('email', localUser.email || localUser.username)
-                    .single();
+                const data = mockDb.drivers.getByEmail(localUser.email || localUser.username);
                 
-                if (data && !error) {
+                if (data) {
                     console.log('Driver profile data:', data);
                     const profileData = {
                         name: data.name || data.username || '',
@@ -272,17 +199,9 @@ const DriverDashboard = () => {
                     };
                     setProfile(profileData);
                     
-                    // If profile is missing driver-specific fields, show the form
                     const isNewDriver = !data.vehicle_model || !data.vehicle_plate || !data.experience;
-                    const completed = !isNewDriver;
-                    setIsSaved(completed);
-
-                    // Sync local storage
-                    const updatedUser = { ...localUser, ...profileData, profileCompleted: completed };
-                    localStorage.setItem('user', JSON.stringify(updatedUser));
+                    setIsSaved(!isNewDriver);
                 } else {
-                    console.warn('Profile fetch note:', error?.message);
-                    // If no profile found at all, treat as new
                     setIsSaved(false);
                 }
                 setIsLoadingProfile(false);
@@ -365,7 +284,7 @@ const DriverDashboard = () => {
                         pointerEvents: 'none',
                         transition: 'opacity 0.8s ease, transform 0.8s ease',
                         opacity: isSaved ? 0 : 1,
-                        transform: isSaved ? 'translateY(-20px)' : 'translateY(0)',
+                        transform: isSaved ? 'translateY(-1.25rem)' : 'translateY(0)',
                     }}>
                         <h1 style={{ margin: 0, fontSize: '2.2rem', fontWeight: 700, letterSpacing: '-0.5px' }}>
                             Complete your profile
@@ -378,13 +297,13 @@ const DriverDashboard = () => {
                     {/* ── NEW Dashboard Title Overlay ── */}
                     <div style={{
                         position: 'absolute',
-                        top: '30px', left: '10%', right: '10%',
+                        top: '1.875rem', left: '10%', right: '10%',
                         color: '#fff',
                         fontFamily: 'sans-serif',
-                        fontSize: '2.0rem',
+                        fontSize: '2rem',
                         fontWeight: 700,
                         opacity: isSaved ? 1 : 0,
-                        transform: isSaved ? 'translateY(0)' : 'translateY(20px)',
+                        transform: isSaved ? 'translateY(0)' : 'translateY(1.25rem)',
                         transition: 'opacity 0.8s ease 0.4s, transform 0.8s ease 0.4s',
                         pointerEvents: 'none',
                     }}>
@@ -426,17 +345,17 @@ const DriverDashboard = () => {
                             width: '100%',
                             height: '80%',
                             boxSizing: 'border-box',
-                            padding: '0 40px 24px',
+                            padding: '0 2.5rem 1.5rem',
                             display: 'flex',
                             flexDirection: 'column',
                             justifyContent: 'flex-start',
-                            gap: '48px',
+                            gap: '3rem',
                             color: '#fff',
                             fontFamily: 'sans-serif',
                         }}>
 
                             {/* Top 3px separator — spans full d_icenter width, edge to edge */}
-                            <div style={{ width: 'calc(100% + 80px)', height: '3px', backgroundColor: '#2a2a2a', flexShrink: 0, marginLeft: '-40px' }} />
+                            <div style={{ width: 'calc(100% + 5rem)', height: '0.1875rem', backgroundColor: '#2a2a2a', flexShrink: 0, marginLeft: '-2.5rem' }} />
 
                             {/* ── Profile upload row ── */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: '26px' }}>
@@ -450,8 +369,8 @@ const DriverDashboard = () => {
                                 <div
                                     onClick={() => profileInputRef.current.click()}
                                     style={{
-                                        width: '110px', height: '110px',
-                                        border: '1.5px solid #444', borderRadius: '50%',
+                                        width: '6.875rem', height: '6.875rem',
+                                        border: '0.09375rem solid #444', borderRadius: '50%',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                                         flexShrink: 0, cursor: 'pointer', overflow: 'hidden',
                                         background: '#111',
@@ -479,7 +398,7 @@ const DriverDashboard = () => {
 
                                 {/* Name */}
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                    <label style={{ fontSize: '1.15rem', color: '#ccc', whiteSpace: 'nowrap', flexShrink: 0, minWidth: '120px' }}>Name :</label>
+                                    <label style={{ fontSize: '1.15rem', color: '#ccc', whiteSpace: 'nowrap', flexShrink: 0, minWidth: '7.5rem' }}>Name :</label>
                                     <input 
                                         style={iStyle} 
                                         type="text" 
@@ -491,7 +410,7 @@ const DriverDashboard = () => {
 
                                 {/* Email */}
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                    <label style={{ fontSize: '1.15rem', color: '#ccc', whiteSpace: 'nowrap', flexShrink: 0, minWidth: '120px' }}>Email :</label>
+                                    <label style={{ fontSize: '1.15rem', color: '#ccc', whiteSpace: 'nowrap', flexShrink: 0, minWidth: '7.5rem' }}>Email :</label>
                                     <input 
                                         style={iStyle} 
                                         type="email" 
@@ -503,7 +422,7 @@ const DriverDashboard = () => {
 
                                 {/* Password */}
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                    <label style={{ fontSize: '1.15rem', color: '#ccc', whiteSpace: 'nowrap', flexShrink: 0, minWidth: '120px' }}>Password :</label>
+                                    <label style={{ fontSize: '1.15rem', color: '#ccc', whiteSpace: 'nowrap', flexShrink: 0, minWidth: '7.5rem' }}>Password :</label>
                                     <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
                                         <input
                                             style={{ ...iStyle, paddingRight: '32px', width: '100%', boxSizing: 'border-box' }}
@@ -537,7 +456,7 @@ const DriverDashboard = () => {
 
                                 {/* Phone */}
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                    <label style={{ fontSize: '1.15rem', color: '#ccc', whiteSpace: 'nowrap', flexShrink: 0, minWidth: '120px' }}>Phno :</label>
+                                    <label style={{ fontSize: '1.15rem', color: '#ccc', whiteSpace: 'nowrap', flexShrink: 0, minWidth: '7.5rem' }}>Phno :</label>
                                     <span style={{
                                         padding: '9px 11px',
                                         border: '1px solid #3a3a3a', borderRadius: '6px',
@@ -568,7 +487,7 @@ const DriverDashboard = () => {
                             <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
 
                                 {/* Vehicle image upload */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flexShrink: 0, width: '200px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem', flexShrink: 0, width: '12.5rem' }}>
                                     <span style={{ fontSize: '0.95rem', color: '#777', textAlign: 'center' }}>Upload your vehicle image</span>
                                     <input
                                         ref={vehicleInputRef}
@@ -580,12 +499,12 @@ const DriverDashboard = () => {
                                     <div
                                         onClick={() => vehicleInputRef.current.click()}
                                         style={{
-                                            width: '200px', height: '195px',
+                                            width: '12.5rem', height: '12.1875rem',
                                             backgroundColor: '#0d0d0d',
-                                            border: '1px solid #2a2a2a', borderRadius: '14px',
+                                            border: '0.0625rem solid #2a2a2a', borderRadius: '0.875rem',
                                             display: 'flex', flexDirection: 'column',
                                             alignItems: 'center', justifyContent: 'center',
-                                            gap: '12px', cursor: 'pointer', overflow: 'hidden',
+                                            gap: '0.75rem', cursor: 'pointer', overflow: 'hidden',
                                         }}
                                     >
                                         {vehicleImg
@@ -861,11 +780,11 @@ const DriverDashboard = () => {
                         </div>
 
                         {/* Lower section: Available rides (Compact layout with Real Map) */}
-                        <div style={{ position: 'absolute', bottom: 0, left: '10%', width: '80%', height: '420px', display: 'flex', flexDirection: 'column' }}>
+                        <div style={{ position: 'absolute', bottom: 0, left: '10%', width: '80%', height: '26.25rem', display: 'flex', flexDirection: 'column' }}>
                             <img src={dIcenter} alt="rides-bg" style={{ width: '100%', height: '100%', objectFit: 'fill', position: 'absolute', inset: 0, zIndex: 0 }} />
                             
                             {/* Available Rides Header (Smaller padding) */}
-                            <div style={{ position: 'relative', zIndex: 1, padding: '15px 30px 5px', color: '#fff', fontFamily: 'sans-serif' }}>
+                            <div style={{ position: 'relative', zIndex: 1, padding: '0.9375rem 1.875rem 0.3125rem', color: '#fff', fontFamily: 'sans-serif' }}>
                                 <p style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>Available rides</p>
                             </div>
 
@@ -874,11 +793,11 @@ const DriverDashboard = () => {
                                 position: 'relative', 
                                 zIndex: 1, 
                                 overflowY: 'auto', 
-                                padding: '0 30px 20px',
+                                padding: '0 1.875rem 1.25rem',
                                 flex: 1,
                                 display: 'flex',
                                 flexDirection: 'column',
-                                gap: '15px'
+                                gap: '0.9375rem'
                             }}>
                                 {availableRides.length === 0 ? (
                                     <div style={{ color: '#555', textAlign: 'center', marginTop: '40px' }}>
@@ -896,7 +815,7 @@ const DriverDashboard = () => {
                                             {/* Card Body: Map Area (Click to expand) */}
                                             <div className="ride-map-placeholder-g" onClick={() => setIsMapExpanded(true)} style={{ cursor: 'pointer' }}>
                                                 <MapContainer 
-                                                    center={ride.pickup_lat && ride.pickup_lng ? [ride.pickup_lat, ride.pickup_lng] : [17.3850, 78.4867]} 
+                                                    center={[17.3850, 78.4867]} 
                                                     zoom={11} 
                                                     zoomControl={false}
                                                     dragging={false}
@@ -907,8 +826,14 @@ const DriverDashboard = () => {
                                                     <TileLayer 
                                                         url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" 
                                                     />
-                                                    {ride.pickup_lat && ride.pickup_lng && <Marker position={[ride.pickup_lat, ride.pickup_lng]} icon={pickupIcon} />}
-                                                    {ride.drop_lat && ride.drop_lng && <Marker position={[ride.drop_lat, ride.drop_lng]} icon={dropIcon} />}
+                                                    <Marker position={[17.3984, 78.5562]} icon={pickupIcon} />
+                                                    <Marker position={[17.4334, 78.6946]} icon={dropIcon} />
+                                                    <Polyline 
+                                                        positions={[[17.3984, 78.5562], [17.41, 78.60], [17.4334, 78.6946]]} 
+                                                        color="#93c5fd" 
+                                                        weight={8} 
+                                                        opacity={1}
+                                                    />
                                                 </MapContainer>
                                             </div>
 

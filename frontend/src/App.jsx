@@ -25,6 +25,8 @@ function App() {
         {/* Customer Routes */}
         <Route path="/booking-interface" element={<BookingInterface />} />
         <Route path="/booked-interface" element={<BookedInterface />} />
+        <Route path="/bookedinterface" element={<BookedInterface />} />
+        <Route path="/bookedinterface1" element={<BookedInterface />} />
         <Route path="/ride" element={<Navigate to="/booked-interface" replace />} />
         <Route path="/bus-booking" element={<Placeholder title="Bus Booking" />} />
         <Route path="/rentals" element={<Placeholder title="Rentals" />} />
@@ -34,6 +36,7 @@ function App() {
 
         {/* Driver Routes */}
         <Route path="/booked-interface2" element={<BookedInterface2 />} />
+        <Route path="/bookedinterface2" element={<BookedInterface2 />} />
         <Route path="/driver-dashboard" element={<DriverDashboard />} />
         <Route path="/activity" element={<Placeholder title="Activity" />} />
 

@@ -33,8 +33,8 @@
   top: 48%;
   left: 42%;
   transform: rotate(78deg);
-  width: 180px;
-  height: 220px;
+  width: 11.25rem;
+  height: 13.75rem;
   z-index: 100;
   cursor: pointer;
   opacity: 0;
@@ -49,8 +49,8 @@
   left: 50%;
   transform: translate(-50%, -50%) rotate(0deg);
   width: auto;
-  min-width: 500px;
-  height: calc(100vh - 20px);
+  min-width: 31.25rem;
+  height: calc(100vh - 1.25rem);
   opacity: 1;
 }
 
@@ -142,7 +142,7 @@
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: -0.02em;
-  border-bottom: 3px solid #000;
+  border-bottom: 0.1875rem solid #000;
   padding-bottom: 0.5rem;
 }
 
@@ -269,44 +269,37 @@
 }
 
 .home-title {
-  width: 1000px;
-  /* Initial large size */
-  max-width: 90vw;
+  width: min(62.5rem, 80vw);
   height: auto;
   transition: width 1.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .title-shift-up .home-title {
-  width: 750px;
-  /* Shrinks exactly when car moves */
+  width: min(46.875rem, 60vw);
 }
 
 .title-tagline {
   font-family: 'Outfit', sans-serif;
   color: #000;
-  font-size: 1.8rem;
-  /* Initially larger */
+  font-size: clamp(1rem, 2.5vw, 1.8rem);
   font-weight: 700;
   font-style: italic;
-  margin-top: -40px !important;
-  /* Tighter gap below the logo */
+  margin-top: -2.5rem !important;
   text-transform: uppercase;
   letter-spacing: 0.1rem;
   transition: font-size 1.5s cubic-bezier(0.4, 0, 0.2, 1), margin-top 1.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .title-shift-up .title-tagline {
-  font-size: 1.4rem;
-  /* Shrinks with title */
-  margin-top: -15px;
-  /* Adjust gap for smaller size */
+  font-size: clamp(0.8rem, 2vw, 1.4rem);
+  margin-top: -0.9375rem;
 }
 
 @keyframes titleEntry {
   from {
     opacity: 0;
-    transform: translate(-50%, -30px) scale(0.95);
-    filter: blur(5px);
+    transform: translate(-50%, -1.875rem) scale(0.95); /* -30px */
+    filter: blur(0.3125rem); /* 5px */
   }
 
   to {
@@ -327,11 +320,8 @@
 
 .car-image {
   position: absolute;
-  left: -1000px;
-  /* Start further away for larger image */
-  width: 1000px;
-  /* Larger car */
-
+  left: -62.5rem;
+  width: min(62.5rem, 80vw);
   height: auto;
   transition: left 1.5s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 10;
@@ -398,13 +388,9 @@
 
 .speed-trail {
   position: absolute;
-  /* Sync speed perfectly by making it travel the EXACT same distance as the car. 
-     The car travels from "left: -1000px" to "left: 50%".
-     Since we want this image to end at "left: -4150px", 
-     it must start at "left: -4150px" MINUS that exact same distance "(50vw + 1000px)". */
-  left: calc(-4155px - 50vw - 1000px) !important;
+  left: calc(-259.6875rem - 50vw - 62.5rem) !important;
   width: auto;
-  height: 1250px;
+  height: 78.125rem;
   top: 58%;
   transform: translateY(-50%) scale(1);
   transition: left 1.5s cubic-bezier(0.4, 0, 0.2, 1), transform 1.2s cubic-bezier(0.8, 0, 0.2, 1);
@@ -412,8 +398,7 @@
 }
 
 .animate .speed-trail {
-  left: -4165px !important;
-  /* Ends right behind the car */
+  left: -260.3125rem !important;
 }
 
 .arrow-container {
@@ -427,8 +412,7 @@
 }
 
 .arrow-graphic {
-  width: 70px;
-  /* Made little bit smaller */
+  width: 4.375rem;
   height: auto;
   opacity: 0;
   animation: halfSpinFade 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
@@ -469,8 +453,7 @@
   top: 50%;
   left: 0;
   width: 100%;
-  height: 500px;
-  /* Matched to larger car */
+  height: 31.25rem; /* 500px */
   transform: translateY(-50%);
   pointer-events: none;
   opacity: 0;
@@ -515,12 +498,10 @@
 }
 
 .exit-sequence .speed-trail {
-  /* Move right by 100vw, PLUS 300px to shift it closer to the car */
-  left: calc(-4165px + 100vw + 800px) !important;
+  left: calc(-260.3125rem + 100vw + 50rem) !important; /* -4165px + 100vw + 800px */
   transform: translateY(-50%) !important;
   transition: left 1.5s cubic-bezier(0.5, 0, 0.1, 1) !important;
   z-index: 9 !important;
-  /* Ensure it stays behind the car */
 }
 
 .line {
@@ -531,23 +512,23 @@
 }
 
 .l1 {
-  width: 400px;
+  width: 25rem;
   top: 35%;
-  left: -400px;
+  left: -25rem;
   animation: speedLine 1s linear infinite;
 }
 
 .l2 {
-  width: 300px;
+  width: 18.75rem;
   top: 50%;
-  left: -300px;
+  left: -18.75rem;
   animation: speedLine 0.7s linear infinite 0.1s;
 }
 
 .l3 {
-  width: 500px;
+  width: 31.25rem;
   top: 65%;
-  left: -500px;
+  left: -31.25rem;
   animation: speedLine 1.2s linear infinite 0.2s;
 }
 
@@ -587,7 +568,7 @@ header {
 
 .services-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); /* 160px */
   gap: 1.5rem;
 }
 
@@ -620,7 +601,7 @@ header {
 /* Driver Specific */
 .stats-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(12.5rem, 1fr)); /* 200px */
   gap: 1.5rem;
   margin-bottom: 3rem;
 }
@@ -687,7 +668,7 @@ header {
 }
 
 .sidebar-nav {
-  width: 80px;
+  width: 5rem; /* 80px */
   background-size: 100% 100%;
   background-repeat: no-repeat;
   display: flex;
@@ -697,11 +678,8 @@ header {
   padding: 1.5rem 0;
   border-radius: 2rem;
   height: calc(100% - 3rem);
-  /* Adjust height to match inner padding */
   margin: 1.5rem 0;
-  /* Align perfectly with shifted main content area */
   margin-left: 2rem;
-  /* Shifting right slightly */
 }
 
 .logo-container {
@@ -713,7 +691,7 @@ header {
 }
 
 .nav-logo {
-  width: 46px;
+  width: clamp(2rem, 5vw, 2.875rem); /* 46px */
   height: auto;
 }
 
@@ -767,13 +745,11 @@ header {
   background-size: 100% 100%;
   background-repeat: no-repeat;
   border-radius: 2.5rem;
-  padding: 2.5rem;
+  padding: clamp(1rem, 3vw, 2.5rem);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  /* Ensure modal slides within bounds */
   position: relative;
-  /* Container for absolute modal */
 }
 
 .main-inner-container {
@@ -789,8 +765,7 @@ header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  width: calc(100% - 48px);
-  /* Account for plus button (32px) + gap (1rem/16px) */
+  width: calc(100% - 3rem); /* 48px */
 }
 
 .action-dropdowns {
@@ -843,15 +818,13 @@ header {
 
 .location-input-container {
   background: rgba(18, 18, 18, 0.8);
-  border: 2px solid rgba(255, 255, 255, 0.8);
-  /* Bolder white border as in image */
+  border: 0.125rem solid rgba(255, 255, 255, 0.8); /* 2px */
   border-radius: 1rem;
   padding: 0.5rem 1.5rem;
   display: flex;
   align-items: center;
   gap: 1.5rem;
   flex: 1;
-  /* Stretch to fill space */
   position: relative;
 }
 
@@ -981,10 +954,13 @@ header {
 
 .suggestion-address {
   color: #64748b;
-  font-size: 0.9rem;
-  white-space: nowrap;
+  font-size: 0.85rem;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* Skeleton Loading Layout Fixes */
@@ -1140,7 +1116,7 @@ header {
   color: #000;
   border: none;
   border-radius: 3rem;
-  padding: 1rem 4rem;
+  padding: 0.8rem 3.5rem; /* Slightly reduced */
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -1269,9 +1245,9 @@ header {
 }
 
 .modal-icon-badge {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
+  width: 2.75rem; /* 44px */
+  height: 2.75rem; /* 44px */
+  border-radius: 0.875rem; /* 14px */
   background: rgba(255, 255, 255, 0.06);
   display: flex;
   align-items: center;
@@ -1392,7 +1368,7 @@ header {
 
 .modal-btn {
   padding: 0.7rem 1.6rem;
-  border-radius: 14px;
+  border-radius: 0.875rem; /* 14px */
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
@@ -1430,12 +1406,12 @@ header {
 .schedule-date-card {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 0.875rem; /* 14px */
   margin-bottom: 1.5rem;
   padding: 1rem 1.2rem;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 16px;
+  border-radius: 1rem; /* 16px */
 }
 
 .schedule-date-icon {
@@ -1528,7 +1504,7 @@ header {
 }
 
 .wheel-item {
-  height: 56px;
+  height: 3.5rem; /* 56px */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1558,14 +1534,14 @@ header {
   right: 1.5rem;
   background: rgba(20, 20, 20, 0.95);
   border: 1px solid rgba(239, 68, 68, 0.2);
-  border-radius: 14px;
+  border-radius: 0.875rem; /* 14px */
   padding: 0.7rem 1rem;
   display: flex;
   align-items: center;
   gap: 0.6rem;
   color: #ef4444;
   font-size: 0.8rem;
-  max-width: 350px;
+  max-width: min(21.875rem, 80vw); /* 350px */
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
@@ -2119,9 +2095,19 @@ header {
 }
 
 .map-view-img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: fill;
+  border-radius: 2.5rem;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.map-view-img .leaflet-container {
+  width: 100% !important;
+  height: 100% !important;
   border-radius: 2.5rem;
 }
 
@@ -2155,8 +2141,8 @@ header {
 }
 
 .driver-avatar-large {
-  width: 38px;
-  height: 38px;
+  width: 2.375rem; /* 38px */
+  height: 2.375rem; /* 38px */
   background: #262626;
   border-radius: 50%;
 }
@@ -2202,7 +2188,7 @@ header {
 }
 
 .vehicle-large-img {
-  width: 75px;
+  width: 4.6875rem; /* 75px */
   height: auto;
   object-fit: contain;
 }
@@ -2258,8 +2244,8 @@ header {
 }
 
 .driver-avatar-large {
-  width: 48px; /* Increased from 38px */
-  height: 48px; /* Increased from 38px */
+  width: 3rem; /* 48px */
+  height: 3rem; /* 48px */
   background: #262626;
   border-radius: 50%;
 }
@@ -2340,24 +2326,24 @@ header {
 }
 
 .mini-indicator-dot {
-  width: 10px;
-  height: 10px;
-  border: 2px solid #fff;
+  width: 0.625rem; /* 10px */
+  height: 0.625rem; /* 10px */
+  border: 0.125rem solid #fff;
   border-radius: 50%;
   background: #000;
 }
 
 .mini-indicator-line {
-  width: 2px;
+  width: 0.125rem; /* 2px */
   flex: 1;
   background: #fff;
-  min-height: 20px;
+  min-height: 1.25rem; /* 20px */
 }
 
 .mini-indicator-square {
-  width: 10px;
-  height: 10px;
-  border: 2px solid #fff;
+  width: 0.625rem; /* 10px */
+  height: 0.625rem; /* 10px */
+  border: 0.125rem solid #fff;
   background: #000;
 }
 
@@ -2471,8 +2457,8 @@ header {
 }
 
 .driver-avatar-circle {
-  width: 32px;
-  height: 32px;
+  width: 2rem; /* 32px */
+  height: 2rem; /* 32px */
   background: #262626;
   border-radius: 50%;
 }

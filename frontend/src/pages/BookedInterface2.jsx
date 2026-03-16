@@ -1,9 +1,8 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Car, Bus, Key, Train, Package, User, CheckCircle, Send, Loader } from 'lucide-react';
-import { supabase } from '../supabaseClient';
+import { mockDb } from '../mockDb';
 import { useEffect, useState } from 'react';
 import navBarImg from '../assets/nav bar.png';
-import centerImg from '../assets/center.png';
 import logoImg from '../assets/logo.png';
 import mapImgAsset from '../assets/map.png';
 import chatImgAsset from '../assets/chat.png';
@@ -11,13 +10,13 @@ import rideDetailsImgAsset from '../assets/ride details.png';
 import driverDetailsImgAsset from '../assets/driver details.png';
 import scootyAsset from '../assets/scooty.png';
 
-const BookedInterface = () => {
+const BookedInterface2 = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const rideId = location.state?.rideId;
 
     const [ride, setRide] = useState(null);
-    const [driver, setDriver] = useState(null);
+    const [passenger, setPassenger] = useState(null);
     const [loading, setLoading] = useState(true);
     const [messages, setMessages] = useState([]);
     const [inputText, setInputText] = useState('');
@@ -25,38 +24,20 @@ const BookedInterface = () => {
 
     useEffect(() => {
         if (!rideId) {
-            navigate('/booking-interface');
-            return;
+            console.log("No rideId found, but bypassing redirect for testing.");
+            // navigate('/driver-dashboard');
+            // return;
         }
 
-        const fetchFullProfile = async (email) => {
-            if (!email) return null;
-            console.log('Attempting profile fetch (ilike) for:', email);
-            const { data, error } = await supabase
-                .from('drivers')
-                .select('*')
-                .ilike('email', email)
-                .single();
-            if (error) {
-                console.error('Profile fetch failed:', error.message);
-                return null;
-            }
-            return data;
-        };
-
-        const loadContent = async () => {
+        const loadContent = () => {
             setLoading(true);
-            const { data: rideData, error: rideError } = await supabase
-                .from('rides')
-                .select('*')
-                .eq('id', rideId)
-                .single();
+            const rideData = mockDb.rides.getById(rideId);
 
-            if (!rideError && rideData) {
+            if (rideData) {
                 setRide(rideData);
-                if (rideData.driver_email) {
-                    const dData = await fetchFullProfile(rideData.driver_email);
-                    if (dData) setDriver(dData);
+                if (rideData.passenger_email) {
+                    const pData = mockDb.users.getByEmail(rideData.passenger_email);
+                    if (pData) setPassenger(pData);
                 }
             }
             setLoading(false);
@@ -64,44 +45,33 @@ const BookedInterface = () => {
 
         loadContent();
 
-        const subscription = supabase
-            .channel(`ride-sync-${rideId}`)
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rides', filter: `id=eq.${rideId}` }, async (payload) => {
-                const updatedRide = payload.new;
-                console.log('Sync update received:', updatedRide.status);
-                setRide(updatedRide);
+        // Polling for updates
+        const pollInterval = setInterval(() => {
+            const updatedRide = mockDb.rides.getById(rideId);
+            if (!updatedRide) return;
+            
+            setRide(updatedRide);
 
-                if (updatedRide.status === 'accepted' && updatedRide.driver_email && !driver) {
-                    const dData = await fetchFullProfile(updatedRide.driver_email);
-                    if (dData) setDriver(dData);
-                }
-
-                if (updatedRide.status === 'cancelled') {
-                    alert('Ride cancelled by driver');
-                    navigate('/booking-interface');
-                }
-            })
-            .subscribe();
-
-        // Polling fallback every 5 seconds if driver is still missing but ride is accepted
-        const pollInterval = setInterval(async () => {
-            if (ride?.status === 'accepted' && ride?.driver_email && !driver) {
-                console.log('Polling fallback: checking driver profile again...');
-                const dData = await fetchFullProfile(ride.driver_email);
-                if (dData) setDriver(dData);
+            if (updatedRide.status === 'accepted' && updatedRide.passenger_email && !passenger) {
+                const pData = mockDb.users.getByEmail(updatedRide.passenger_email);
+                if (pData) setPassenger(pData);
             }
-        }, 5000);
+
+            if (updatedRide.status === 'cancelled') {
+                alert('Ride cancelled by passenger');
+                navigate('/driver-dashboard');
+            }
+        }, 2000);
 
         return () => {
-            supabase.removeChannel(subscription);
             clearInterval(pollInterval);
         };
-    }, [rideId, navigate, ride?.status, ride?.driver_email, driver]);
+    }, [rideId, navigate, passenger]);
 
     const quickTips = [
-        "Please come fast",
-        "I'm at the pickup point",
-        "I'm waiting"
+        "Arriving in 2 mins",
+        "I have arrived",
+        "Please be ready"
     ];
 
     const handleSendMessage = (text, type = 'bubble') => {
@@ -161,38 +131,32 @@ const BookedInterface = () => {
                 {loading ? (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#fff' }}>
                         <Loader className="spin" size={40} />
-                        <span style={{ marginLeft: '10px' }}>Loading trip details...</span>
+                        <span style={{ marginLeft: '0.625rem' }}>Loading trip details...</span>
                     </div>
                 ) : (
                     <div className="booked-final-layout">
                         <div className="left-panel">
                             <img src={mapImgAsset} alt="Map" className="map-view-img" />
-                            <div className="dynamic-driver-details" style={{ backgroundImage: `url("${driverDetailsImgAsset}")` }}>
-                                <div className="driver-main-header">
+                            <div className="dynamic-driver-details driver-pov" style={{ backgroundImage: `url("${driverDetailsImgAsset}")` }}>
+                                <div className="driver-details-content-top">
                                     <div className="driver-avatar-large"></div>
-                                    <div className="driver-meta">
+                                    <div className="driver-meta-driver">
                                         <div className="driver-name-row">
-                                            <span className="driver-full-name">{driver?.name || driver?.username || 'Driver'}</span>
+                                            <span className="driver-full-name">{passenger?.name || passenger?.username || 'Passenger'}</span>
                                             <CheckCircle size={16} className="verified-icon-alt" />
                                         </div>
-                                        <div className="driver-rating-row">
-                                            <span className="star-icon">★</span>
-                                            <span className="rating-value">4.8</span>
+                                        <div className="driver-phno">
+                                            {passenger?.phone || 'Connecting...'}
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="vehicle-info-row">
-                                    <img src={scootyAsset} alt="Vehicle" className="vehicle-large-img" />
-                                    <div className="vehicle-details-text">
-                                        <div className="vehicle-model">{driver?.vehicle_model || ride?.vehicle_type || 'Vehicle'}</div>
-                                        <div className="vehicle-plate">{driver?.vehicle_plate || (ride?.status === 'accepted' ? 'Loading' : '')}</div>
-                                    </div>
-                                </div>
-
-                                <div className="status-footer">
-                                    <span className="current-status" style={{ textTransform: 'capitalize' }}>{ride?.status}</span>
-                                </div>
+                                <button 
+                                    className="arrived-btn-white"
+                                    onClick={async () => {
+                                        await supabase.from('rides').update({ status: 'arrived' }).eq('id', rideId);
+                                    }}
+                                >{ride?.status === 'arrived' ? 'Waiting' : 'Arrived'}</button>
                             </div>
                         </div>
                         <div className="right-panel">
@@ -233,7 +197,7 @@ const BookedInterface = () => {
                                     className="cancel-ride-btn"
                                     onClick={async () => {
                                         await supabase.from('rides').update({ status: 'cancelled' }).eq('id', rideId);
-                                        navigate('/booking-interface');
+                                        navigate('/driver-dashboard');
                                     }}
                                 >Cancel Ride</button>
                             </div>
@@ -242,7 +206,7 @@ const BookedInterface = () => {
                                 <div className="chat-header">
                                     <div className="driver-avatar-circle"></div>
                                     <div className="driver-info">
-                                        <span className="driver-name">{driver?.name?.toLowerCase() || driver?.username?.toLowerCase() || 'driver'}</span>
+                                        <span className="driver-name">{passenger?.name?.toLowerCase() || passenger?.username?.toLowerCase() || 'passenger'}</span>
                                         <CheckCircle size={14} className="verified-icon" />
                                     </div>
                                 </div>
@@ -294,4 +258,4 @@ const BookedInterface = () => {
     );
 };
 
-export default BookedInterface;
+export default BookedInterface2;
