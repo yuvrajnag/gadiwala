@@ -1,0 +1,63 @@
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/resources/architecture.xml
+!**/src/main/resources/architecture.html
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+### VS Code ###
+.vscode/
+
+### Logs ###
+*.log
+*.txt
+backend_boot_log.txt
+backend_err.txt
+backend_log.txt
+boot_run.log
+build.log
+detailed_boot.log
+full_mvn_log.txt
+full_mvn_log_ascii.txt
+mvn_output.txt
+mvn_package_log.txt
+mvn_package_log_ascii.txt
+mysql_boot_err.txt
+mysql_boot_log.txt
+run_errors.txt
+run_log.txt
+run_log_v2.txt
+run_log_v3.txt
+test_err.txt
+test_output.txt
+
+### Environment ###
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+### Database ###
+data/
+
